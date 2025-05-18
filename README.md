@@ -44,6 +44,7 @@ python _run_script.py
 
 
 🏷️ To run a specific method, you can run "main_...py" or "baseline_...py" in the root directory or in the baseline folder. Don't forget to modify the args file to configure parameters (such as tasks or datasets).
+
 🔖 You can run the files in Privacy_Analysis folder to get the privacy analysis results.
 
 
