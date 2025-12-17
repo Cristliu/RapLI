@@ -7,12 +7,12 @@ def get_parser():
     # Required parameters
 
     parser.add_argument('--task',
-                        choices=['topic_classification', 'piidocs_classification','synthpai','samsum'],
+                        choices=['topic_classification', 'piidocs_classification','synthpai','samsum','spam_email_classification'],
                         default='samsum',
                         help='NLP eval tasks')
     
     parser.add_argument('--dataset',
-                        choices=['ag_news', "piidocs",'synthpai','samsum'],
+                        choices=['ag_news', "piidocs",'synthpai','samsum','spam_email'],
                         default='samsum',
                         help='NLP eval datasets')
     
@@ -59,5 +59,22 @@ def get_parser():
     parser.add_argument("--ablation_3_2", action="store_true", help="Ablation experiment 3_1 - K_base is set to 50.")
     parser.add_argument("--ablation_3_3", action="store_true", help="Ablation experiment 3_1 - K_base is set to 100.")
     parser.add_argument("--ablation_4", action="store_true", help="Ablation experiment 4 - do not perturb tokens identified as high risk.")
+
+    parser.add_argument("--new_ablation_1", action="store_true", help="Remove PII detection and risk assessment; use epsilon for all tokens,epsilon=1")
+    parser.add_argument("--new_ablation_2", action="store_true", help="All tokens undergo score reversal. (sim_scores[::-1])")
+
+    # New: Chinese PII detection related parameters
+    parser.add_argument("--use_transformer_pii", action="store_true", 
+                       help="Use Transformer-enhanced PII detector for Chinese datasets")
+    parser.add_argument("--pii_detection_mode", type=str, 
+                       choices=["traditional", "intelligent", "transformer"], 
+                       default="intelligent",
+                       help="PII detection mode: traditional (Flair+Presidio), intelligent (rule-based), transformer (Transformer-enhanced)")
+    
+    # New: Fine-grained non-PII token perturbation control parameter
+    parser.add_argument("--non_pii_perturbation_prob", type=float, 
+                       choices=[0.1, 0.3, 0.5, 0.7], 
+                       default=0.3,
+                       help="Perturbation probability for non-PII nouns and verbs (0.1, 0.3, 0.5, 0.7)")
 
     return parser

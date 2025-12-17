@@ -37,7 +37,11 @@ class BlackLLMInterface:
                 
                 content = "You are an expert at writing concise, factual summaries of informal chat dialogues. Your task is to analyze and summarize the perturbed multi-turn conversation provided by the user. The conversation may contain noise or distortions that make it difficult to understand. Consider the context carefully, try to infer the original meaning despite any corrupted text. Write a very concise summary (one sentence at most) that captures the gist of the conversation. Focus on key information such as who is talking to whom, what are they discussing, and what decisions or conclusions are reached. Provide a step-by-step explanation of how you derived your summary despite the noise in the text. Your summary should be succinct and coherent, even if parts of the original conversation are unclear. At the very end of your output, strictly include a single JSON dictionary in the format: {'summary': 'Your concise summary here'}, which contains your final summary. This JSON dictionary must appear exactly once in your response, and no other similar structures should be included."
                 return content
-
+        
+        elif self.task == "spam_email_classification":
+            if self.data == "spam_email":
+                content = "你是一位专业的中文邮件分类专家。你的任务是对提供的中文邮件内容进行分类，判断其是否为垃圾邮件。请仔细分析邮件内容，考虑到文本中可能存在的噪音或扰动，并提供简洁、逐步的推理过程。请考虑以下因素：可疑的语言模式、促销内容、紧急行动号召、索取个人信息的请求以及整体合法性。基于你的分析，将邮件分类为以下类别之一：'垃圾邮件'（不需要的、促销的或潜在恶意的邮件）或'正常邮件'（合法的、非垃圾邮件）。即使文本看起来模糊或缺乏足够的上下文，你也必须根据可用信息将其分类到最可能的类别中。避免包含任何表明分类不确定的陈述。在你的推理中不要使用任何JSON格式或对{'label': *}的引用。在输出的最后，严格包含一个JSON字典，格式为：{'label': 1}（垃圾邮件）或{'label': 0}（正常邮件），其中标签对应你的分类结果。这个JSON字典必须在你的响应中只出现一次，不应包含其他类似的结构。"
+                return content
 
 
 

@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy-Preserving LLM Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --bg-color: #ffffff;
+            --sidebar-bg: #f0f4f9;
+            --chat-bubble-user: #d7f5fc; /* Light blue for user */
+            --chat-bubble-bot: #f0f4f9; /* Light grey for bot */
+            --primary-color: #0b57d0; /* Gemini Blue */
+        }
+
+        body { 
+            background-color: var(--bg-color); 
+            height: 100vh; 
+            display: flex; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            border-right: 1px solid #e0e0e0;
+            transition: transform 0.3s ease;
+        }
+        
+        .new-chat-btn {
+            background-color: #dde3ea;
+            color: #444746;
+            border: none;
+            border-radius: 15px;
+            padding: 10px 15px;
+            text-align: left;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .new-chat-btn:hover {
+            background-color: #d0d7de;
+            color: #1f1f1f;
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .history-item {
+            padding: 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            color: #444746;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background-color 0.2s;
+        }
+        .history-item:hover, .history-item.active {
+            background-color: #e0e4e9;
+            color: #1f1f1f;
+        }
+        .history-item .title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+        .history-item .actions {
+            opacity: 0;
+            display: flex;
+            gap: 2px;
+            transition: opacity 0.2s;
+        }
+        .history-item:hover .actions {
+            opacity: 1;
+        }
+        .history-item .action-btn {
+            border: none;
+            background: transparent;
+            color: #666;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .history-item .action-btn:hover {
+            background-color: #d0d0d0;
+            color: #1f1f1f;
+        }
+        .history-item .delete-btn:hover {
+            color: #dc3545;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: white;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* border-bottom: 1px solid #f0f0f0; */
+        }
+        .model-selector {
+            border: none;
+            background: transparent;
+            font-weight: 600;
+            color: #444746;
+            cursor: pointer;
+        }
+        .model-selector:focus { outline: none; }
+
+        /* Chat Area */
+        .chat-container { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 20px 5%; 
+            scroll-behavior: smooth;
+        }
+        
+        /* Welcome Screen */
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: #c4c7c5;
+        }
+        .welcome-text {
+            font-size: 3rem;
+            font-weight: 500;
+            background: -webkit-linear-gradient(45deg, #4285f4, #9b72cb, #d96570);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        /* Messages */
+        .message { margin-bottom: 24px; display: flex; gap: 15px; animation: fadeIn 0.3s ease-in; }
+        .message.user { flex-direction: row-reverse; }
+        .message.bot { flex-direction: row; }
+        
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .user .avatar { background-color: #0b57d0; color: white; }
+        .bot .avatar { background-color: #e0e0e0; color: #444746; } #icon-bot { color: #1f1f1f; }
+
+        .bubble { 
+            padding: 12px 18px; 
+            border-radius: 18px; 
+            max-width: 80%; 
+            line-height: 1.6;
+            position: relative; 
+            font-size: 1rem;
+        }
+        .user .bubble { background-color: var(--chat-bubble-user); color: #1f1f1f; border-top-right-radius: 4px; }
+        .bot .bubble { background-color: transparent; color: #1f1f1f; padding-left: 0; } /* Bot messages blend in more like Gemini */
+
+        /* Input Area */
+        .input-area { 
+            padding: 20px 5%; 
+            background: white; 
+        }
+        .input-container { 
+            background-color: #f0f4f9;
+            border-radius: 30px;
+            padding: 8px 15px;
+            display: flex; 
+            align-items: flex-end;
+            gap: 10px;
+            transition: background-color 0.2s;
+        }
+        .input-container:focus-within {
+            background-color: #e9eef6;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+        }
+        
+        textarea.form-control {
+            background: transparent;
+            border: none;
+            resize: none;
+            box-shadow: none;
+            padding: 10px 0;
+            max-height: 150px;
+        }
+        textarea.form-control:focus { background: transparent; box-shadow: none; }
+
+        .send-btn {
+            border: none;
+            background: transparent;
+            color: var(--primary-color);
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+        .send-btn:hover { background: #e0e4e9; }
+        .send-btn:disabled { color: #ccc; }
+
+        /* Token Highlighting */
+        .token { cursor: pointer; padding: 2px 0; border-radius: 3px; margin: 0; display: inline-block; transition: all 0.2s; }
+        .token:hover { opacity: 0.8; background-color: rgba(0,0,0,0.05); }
+        
+        /* Risk Colors - Simplified to 3 levels */
+        .risk-0 { }
+        .risk-1 { background-color: rgba(255, 243, 205, 0.5); border-bottom: 2px solid #ffecb5; } /* Low */
+        .risk-3 { background-color: rgba(255, 217, 102, 0.5); border-bottom: 2px solid #ffc107; } /* Mid */
+        .risk-5 { background-color: rgba(220, 53, 69, 0.2); border-bottom: 2px solid #dc3545; color: #a50e0e; } /* High */
+        
+        .privacy-panel { 
+            background: #f8f9fa; 
+            border: 1px solid #e9ecef; 
+            padding: 15px; 
+            border-radius: 12px; 
+            margin-top: 15px; 
+            width: 100%; 
+            font-size: 0.9rem;
+        }
+        
+        .loading-spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spinner-border .75s linear infinite; }
+        @keyframes spinner-border { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Selection & Toolbar */
+        .token.selected { background-color: #cce5ff; outline: 1px solid #0d6efd; }
+        .sanitized-highlight { padding: 0 2px; border-radius: 2px; }
+        .restorable { border-bottom: 1px dashed #0d6efd; cursor: pointer; transition: all 0.2s; background-color: rgba(13, 110, 253, 0.1); color: #0b57d0; padding: 0 2px; border-radius: 2px; }
+        .restorable:hover { background-color: rgba(13, 110, 253, 0.25); }
+        .restorable.restored { background-color: rgba(25, 135, 84, 0.1); border-bottom-color: #198754; color: inherit; }
+        
+        /* Risk Colors for Details Panel */
+        .risk-bg-1 { background-color: rgba(255, 243, 205, 0.5); border-bottom: 2px solid #ffecb5; }
+        .risk-bg-3 { background-color: rgba(255, 217, 102, 0.5); border-bottom: 2px solid #ffc107; }
+        .risk-bg-5 { background-color: rgba(220, 53, 69, 0.2); border-bottom: 2px solid #dc3545; color: #a50e0e; }
+        
+        #floatingToolbar {
+            position: absolute;
+            display: none;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: fadeIn 0.2s;
+        }
+        #floatingToolbar button {
+            margin: 0 2px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar d-none d-md-flex">
+    <button class="new-chat-btn" onclick="startNewChat()">
+        <i class="bi bi-plus-lg"></i> New Chat
+    </button>
+    <div class="small text-muted ms-2 mb-2">Recent</div>
+    <div class="history-list" id="historyList">
+        <!-- History items will go here -->
+    </div>
+    <div class="mt-auto">
+        <div class="small text-muted"><i class="bi bi-shield-lock"></i> RapLI Privacy Guard</div>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="top-bar">
+        <div class="d-flex align-items-center w-100">
+            <button class="btn btn-link text-dark d-md-none me-2"><i class="bi bi-list"></i></button>
+            <div class="d-flex flex-column">
+                <select class="model-selector form-select form-select-sm" id="datasetSelect" style="width: auto; min-width: 150px; font-weight: 600; border-radius: 8px;" onchange="handleDatasetChange()">
+                    <option value="general">General Chat</option>
+                    <option value="ag_news">AG News</option>
+                    <option value="samsum">SAMSum</option>
+                    <option value="spam_email">Spam Email (CN)</option>
+                    <option value="user_study">User Study</option>
+                </select>
+                <small class="text-muted" id="taskDescription" style="font-size: 0.75rem; margin-top: 2px; margin-left: 2px;">General Chat</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome-screen" id="welcomeScreen">
+            <div class="welcome-text">RapLI Privacy Guard</div>
+            <div class="mb-4 text-muted">
+                <p class="fs-5">Risk-Aware Privacy Preservation for LLM Inference / 风险感知的大模型推理隐私保护</p>
+            </div>
+            
+            <div class="card border-0 shadow-sm mb-4" style="max-width: 1000px; width: 100%; text-align: left; background: #f8f9fa;">
+                <div class="card-body d-flex align-items-start gap-3">
+                    <i class="bi bi-shield-check fs-2 text-primary mt-1"></i>
+                    <div>
+                        <p class="mb-2" style="color: #444746;">
+                            <strong>RapLI</strong> acts as a secure shield between you and LLMs. It intelligently identifies and masks sensitive personal information (PII) in your inputs, allowing you to safely use cloud-based AI services without data leakage risks.
+                        </p>
+                        <p class="mb-0 small text-muted">
+                            <strong>RapLI</strong> 是您与大模型之间的安全护盾。它能智能识别并掩盖输入中的敏感个人信息（PII），让您在安全使用云端 AI 服务的同时，保护您的隐私。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-0 shadow-sm" style="max-width: 1000px; width: 100%; text-align: left;">
+                <div class="card-body">
+                    <h6 class="card-title fw-bold"><i class="bi bi-info-circle me-2"></i>How it works / 如何使用</h6>
+                    <ol class="list-group list-group-numbered list-group-flush small">
+                        <li class="list-group-item border-0">
+                            <strong>Select Scenario:</strong> Choose a dataset/task from the top dropdown (e.g., Spam Email, General Chat).<br>
+                            <span class="text-muted">选择场景：在顶部下拉框选择一个数据集或任务（如垃圾邮件、通用对话）。</span>
+                        </li>
+                        <li class="list-group-item border-0">
+                            <strong>Input Text:</strong> Type or paste your text below and click Send.<br>
+                            <span class="text-muted">输入文本：在下方输入框输入或粘贴文本，点击发送。</span>
+                        </li>
+                        <li class="list-group-item border-0">
+                            <strong>Review & Edit:</strong> RapLI detects and highlights  PII. You can manually adjust risk levels in the popup.<br>
+                            <span class="text-muted">审查与编辑：系统会自动检测并高亮隐私信息。您可以在弹窗中手动调整风险等级。</span>
+                        </li>
+                        <li class="list-group-item border-0">
+                            <strong>Sanitize & Chat:</strong> Confirm to sanitize the text and send it to the LLM.<br>
+                            <span class="text-muted">脱敏与对话：确认后，系统将对文本进行脱敏并发送给大模型。</span>
+                        </li>
+                        <li class="list-group-item border-0">
+                            <strong>Restore Locally:</strong> Click "Restore All" to restore the perturbed information in the response locally.<br>
+                            <span class="text-muted">本地还原：点击“一键还原”即可在本地将大模型响应中的扰动信息还原。</span>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-container">
+            <textarea class="form-control" id="userInput" rows="1" placeholder="Type a message..." oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+            <button class="send-btn" onclick="processInput()" id="sendBtn">
+                <i class="bi bi-send-fill fs-5"></i>
+            </button>
+        </div>
+        <div class="text-center mt-2">
+            <small class="text-muted" style="font-size: 0.7rem;">RapLI may display inaccurate info, so double-check its responses.</small>
+        </div>
+    </div>
+</div>
+
+<!-- Privacy Modal -->
+<div class="modal fade" id="privacyModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog" style="max-width: 70%;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Privacy Check</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body position-relative">
+                <div class="alert alert-light border-start border-4 border-primary" role="alert">
+                    <h6 class="alert-heading fw-bold small"><i class="bi bi-magic me-2"></i>Interactive Privacy Control / 交互式隐私控制</h6>
+                    <p class="mb-0 small text-muted">
+                        1. <strong>Click</strong> to select tokens. <strong>Shift+Click</strong> to select a range.<br>
+                        2. Use the <strong>Toolbar</strong> to assign risk levels (Safe/Low/Mid/High).<br>
+                        3. <strong>High Risk</strong> items are heavily obfuscated. <strong>Safe</strong> items are kept as is.<br>
+                        <hr class="my-1">
+                        1. <strong>点击</strong>选中词块。<strong>Shift+点击</strong>选中范围。<br>
+                        2. 使用<strong>工具栏</strong>设置风险等级（安全/低/中/高）。<br>
+                        3. <strong>高风险</strong>内容将被重度混淆，<strong>安全</strong>内容保持不变。
+                    </p>
+                </div>
+                <div id="tokenContainer" class="border p-3 rounded mb-3" style="line-height: 2.0; font-size: 1.1em;"></div>
+                
+                <!-- Floating Toolbar -->
+                <div id="floatingToolbar">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="setRiskForSelection(0)">Safe</button>
+                    <button class="btn btn-sm btn-warning" style="background-color: #fff3cd; border-color: #ffecb5;" onclick="setRiskForSelection(1)">Low</button>
+                    <button class="btn btn-sm btn-warning" style="background-color: #ffd966; border-color: #ffc107;" onclick="setRiskForSelection(3)">Mid</button>
+                    <button class="btn btn-sm btn-danger" onclick="setRiskForSelection(5)">High</button>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <div id="analysisMetrics" class="small text-muted"></div>
+                    <div>
+                        <span class="badge bg-danger">High</span>
+                        <span class="badge bg-warning text-dark">Mid</span>
+                        <span class="badge bg-warning text-dark" style="opacity: 0.6;">Low</span>
+                        <span class="badge bg-light text-dark border">Safe</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary me-auto" onclick="resetRisk()">Reset Default</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmPrivacy()">Confirm & Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentTokens = [];
+    let currentVisualTokens = [];
+    let initialTokensState = [];
+    let initialVisualTokensState = [];
+    let currentText = "";
+    let currentTimings = {}; // Store analysis timings
+    let selectedIndices = new Set();
+    let lastClickedIndex = -1;
+    let manualStartTime = 0;
+    let msgCounter = 0;
+    let currentSessionId = null;
+    let sessions = {}; // { id: { id, title, timestamp, messages: [] } }
+    let userId = localStorage.getItem('rapli_user_id');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('rapli_user_id', userId);
+    }
+    
+    const privacyModal = new bootstrap.Modal(document.getElementById('privacyModal'));
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSessionsFromStorage();
+        renderSidebar();
+        updateTaskDescription();
+        
+        // Auto-resize textarea
+        const tx = document.getElementById('userInput');
+        tx.addEventListener("input", function(){
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + "px";
+        });
+        // Enter to send
+        tx.addEventListener("keydown", function(e){
+            if(e.key === 'Enter' && !e.shiftKey){
+                e.preventDefault();
+                processInput();
+            }
+        });
+    });
+
+    function loadSessionsFromStorage() {
+        try {
+            sessions = JSON.parse(localStorage.getItem('rapli_sessions') || '{}');
+        } catch(e) {
+            sessions = {};
+        }
+    }
+
+    function saveSessionsToStorage() {
+        localStorage.setItem('rapli_sessions', JSON.stringify(sessions));
+        renderSidebar();
+    }
+
+    function startNewChat() {
+        currentSessionId = null;
+        document.getElementById('chatContainer').innerHTML = `
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-text">RapLI Privacy Guard</div>
+                <div class="mb-4 text-muted">
+                    <p class="fs-5">Risk-Aware Privacy Preservation for LLM Inference / 风险感知的大模型推理隐私保护</p>
+                </div>
+                
+                <div class="card border-0 shadow-sm mb-4" style="max-width: 1000px; width: 100%; text-align: left; background: #f8f9fa;">
+                    <div class="card-body d-flex align-items-start gap-3">
+                        <i class="bi bi-shield-check fs-2 text-primary mt-1"></i>
+                        <div>
+                            <p class="mb-2" style="color: #444746;">
+                                <strong>RapLI</strong> acts as a secure shield between you and LLMs. It intelligently identifies and masks sensitive personal information (PII) in your inputs, allowing you to safely use cloud-based AI services without data leakage risks.
+                            </p>
+                            <p class="mb-0 small text-muted">
+                                <strong>RapLI</strong> 是您与大模型之间的安全护盾。它能智能识别并掩盖输入中的敏感个人信息（PII），让您在安全使用云端 AI 服务的同时，保护您的隐私。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card border-0 shadow-sm" style="max-width: 1000px; width: 100%; text-align: left;">
+                    <div class="card-body">
+                        <h6 class="card-title fw-bold"><i class="bi bi-info-circle me-2"></i>How it works / 如何使用</h6>
+                        <ol class="list-group list-group-numbered list-group-flush small">
+                            <li class="list-group-item border-0">
+                            <strong>Select Scenario:</strong> Choose a dataset/task from the top dropdown (e.g., Spam Email, General Chat).<br>
+                            <span class="text-muted">选择场景：在顶部下拉框选择一个数据集或任务（如垃圾邮件、通用对话）。</span>
+                            </li>
+                            <li class="list-group-item border-0">
+                                <strong>Input Text:</strong> Type or paste your text below and click Send.<br>
+                                <span class="text-muted">输入文本：在下方输入框输入或粘贴文本，点击发送。</span>
+                            </li>
+                            <li class="list-group-item border-0">
+                                <strong>Review & Edit:</strong> RapLI detects and highlights  PII. You can manually adjust risk levels in the popup.<br>
+                                <span class="text-muted">审查与编辑：系统会自动检测并高亮隐私信息。您可以在弹窗中手动调整风险等级。</span>
+                            </li>
+                            <li class="list-group-item border-0">
+                                <strong>Sanitize & Chat:</strong> Confirm to sanitize the text and send it to the LLM.<br>
+                                <span class="text-muted">脱敏与对话：确认后，系统将对文本进行脱敏并发送给大模型。</span>
+                            </li>
+                            <li class="list-group-item border-0">
+                                <strong>Restore Locally:</strong> Click "Restore All" to restore the perturbed information in the response locally.<br>
+                                <span class="text-muted">本地还原：点击“一键还原”即可在本地将大模型响应中的扰动信息还原。</span>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        `;
+        currentText = "";
+        currentTokens = [];
+        currentTimings = {};
+        msgCounter = 0;
+        
+        // Update active state
+        document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+    }
+
+    function renderSidebar() {
+        const list = document.getElementById('historyList');
+        list.innerHTML = '';
+        
+        // Sort sessions by timestamp desc
+        const sortedSessions = Object.values(sessions).sort((a, b) => b.timestamp - a.timestamp);
+        
+        sortedSessions.forEach(session => {
+            const div = document.createElement('div');
+            div.className = `history-item ${session.id === currentSessionId ? 'active' : ''}`;
+            div.onclick = () => loadSession(session.id);
+            
+            div.innerHTML = `
+                <span class="title"><i class="bi bi-chat-left-text me-2"></i>${session.title}</span>
+                <div class="actions">
+                    <button class="action-btn" onclick="renameSession('${session.id}', event)" title="Rename">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="action-btn delete-btn" onclick="deleteSession('${session.id}', event)" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function renameSession(id, event) {
+        event.stopPropagation();
+        const session = sessions[id];
+        if (!session) return;
+        
+        const newTitle = prompt("Rename chat / 重命名对话:", session.title);
+        if (newTitle && newTitle.trim() !== "") {
+            session.title = newTitle.trim();
+            saveSessionsToStorage();
+        }
+    }
+
+    function loadSession(id) {
+        if (!sessions[id]) return;
+        currentSessionId = id;
+        
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = ''; // Clear current
+        
+        sessions[id].messages.forEach(msg => {
+            // Re-render message
+            // Note: We don't have the loading state here, just final content
+            addMessage(msg.content, msg.role, false);
+        });
+        
+        renderSidebar(); // Update active class
+    }
+
+    function deleteSession(id, event) {
+        event.stopPropagation(); // Prevent click on item
+        if (confirm('Delete this chat?')) {
+            delete sessions[id];
+            saveSessionsToStorage();
+            if (currentSessionId === id) {
+                startNewChat();
+            }
+        }
+    }
+
+    function appendMessageToCurrentSession(role, content) {
+        if (!currentSessionId) {
+            currentSessionId = Date.now().toString();
+            sessions[currentSessionId] = {
+                id: currentSessionId,
+                title: role === 'user' ? (content.length > 20 ? content.substring(0, 20) + '...' : content) : 'New Chat',
+                timestamp: Date.now(),
+                messages: []
+            };
+        }
+        
+        // Update title if it's 'New Chat' and this is user message
+        if (sessions[currentSessionId].title === 'New Chat' && role === 'user') {
+             sessions[currentSessionId].title = content.length > 20 ? content.substring(0, 20) + '...' : content;
+        }
+
+        sessions[currentSessionId].messages.push({ role, content, timestamp: Date.now() });
+        sessions[currentSessionId].timestamp = Date.now(); // Update last modified
+        saveSessionsToStorage();
+    }
+
+    // Removed old loadHistory/addToHistory functions
+
+    const taskDescriptions = {
+        'general': 'General Chat / 通用对话 (Multilingual)',
+        'ag_news': 'Topic Classification / 新闻主题分类 (World, Sports, Business, Sci/Tech)',
+        'samsum': 'Dialogue Summarization / 对话摘要',
+        'spam_email': 'Spam Detection / 垃圾邮件检测 (Chinese)',
+        'user_study': 'User Study Mode / 用户实验模式',
+        'translate': 'Translation / 翻译任务'
+    };
+
+    // User Study Configuration
+    const userStudyCases = [
+        { dataset: 'ag_news', text: `Paul McCartney to perform at Super Bowl The organisers of the half-time entertainment for next year #39;s Super Bowl have signed a deal with Sir Paul McCartney to entertain millions.` },
+        { dataset: 'ag_news', text: `In Brief: NetSuite integrates with WorldPay to boost e-commerce NetSuite has unveiled the availability of multicurrency credit card processing for its e-commerce customers. The new feature was made possible by integration, announced this week, between NetSuite and WorldPay, which is part of The Royal Bank of Scotland Group. NetSuite's e-commerce capability enables companies to transact business on the Web while automatically linking into internal customer relationship management, financial, and warehouse systems. With the new multicurrency credit card processing feature, NetSuite e-commerce customers can now accept credit card payments in 120 currencies and receive settlement in 14 currencies. More information about NetSuite e-commerce is available at www.netsuite.com/netcommerce1.` },
+        { dataset: 'samsum', text: `Jonas: I’m running 10 minutes late. Could you guys just let Mary know that I’m coming and will present today before she starts?
+        Natalie: Sure no problem
+        Olivia: I’ll save a seat for you 😍 
+        Jonas: Thanks so much. See you in a bit xx` },
+        { dataset: 'samsum', text: `Client: Good afternoon. I suggest you adjust the timetable to the reality on the Polish roads. P6 bus Radom - Warsaw, arriving from Cracow, 40 minutes delay.
+        Client: And it was not the first time, there was one hour delay not so long ago...
+        Flix: Hi Marta. We are very sorry that the bus arrived late, but they are operational delays which we have no control over. Apologies.
+        Client: But this happens too often. Why don't you consider rearranging the timetable??
+        Client: I was waiting at the station from 17.10, hoping to get the bus at 17.25. It arrived at 18.10. One hour waiting.
+        Client: It hardly ever happens that the bus arrives on time. The timetable is too optimistic. I understand there are traffic jams but...
+        Flix: Thank you for the information, we will inform our managers about it.
+        Client: Can I make a formal complaint? I had a similar situation last year.
+        Flix: Sure, you can send a complaint by email to info@flix.com.
+        Client: thanks, I will definitely. But I really hope you do something about it this time...
+        Flix: yes, all complaints are addressed by our managers.
+        Client: great. They should not just read them, but do something about it. Will you inform me about the status?
+        Flix: We don't do that automatically, but you can call us and find out. You can find all the necessary info on our website.
+        Client: Ok, I see.
+        Flix: Once again apologies.` },
+        { dataset: 'spam_email', text: `恭喜您获得【限时100元现金红包】！点击链接立即领取：https://example.com/redpacket  🔥爆款商品限时5折：https://example.com/sale 🔥投资回报率35%项目：https://example.com/investment  ⚠️本活动仅限24小时内参与，逾期失效！` },
+        { dataset: 'spam_email', text: `📧 关于提交2023年第四季度差旅费用报销单的通知
+        发送： 财务部
+        接收： 张伟
+        日期： 2025年12月3日
+
+        主题： 📅 重要通知：请及时提交2023年第四季度差旅费用报销单（截止日期：12月8日）
+
+        亲爱的 张伟 先生/女士：
+
+        您好！
+
+        为确保公司财务流程的顺畅进行，并按照年度结账工作的统一安排，财务部现正式启动2023年第四季度（10月1日至12月31日）的差旅费用报销工作。
+
+        🗓️ 截止日期及要求
+        请您务必在 2025年12月8日 下班前，将您在本季度产生的所有差旅费用报销单据完整提交至财务部进行审核和处理。
+
+        📋 具体报销要求
+        为了加速报销审批流程，请您严格按照以下三点要求准备并提交报销材料：
+
+        票据凭证（核心要点）： 请您确保所有费用票据的合规性。对于电子发票，请务必提供其电子原件（PDF或OFD格式），并附上相应的交易记录或行程证明。对于纸质发票，请保证票据清晰、完整。
+
+        报销事由及金额： 请在报销单上清晰、完整地说明每一笔费用的报销事由（例如：出差目的地、项目名称、日期范围）以及对应的准确金额。这将有助于我们进行内部成本核算与项目匹配。
+
+        模板使用规范： 请您务必使用邮件附件中提供的最新版《2023Q4报销模板.xlsx》进行填写。请勿自行更改模板格式，并确保所有信息填写准确无误。
+
+        💡 重要提醒
+        超时提交： 12月8日为本季度报销的最终截止日期。逾期提交的报销单，可能需要等到下一轮（即明年第一季度）的集中处理，这可能会延误您的款项到账时间。
+
+        附件下载： 请注意下载并使用本邮件随附的**《2023Q4报销模板.xlsx》**。
+
+        如有任何关于报销流程、政策或模板填写方面的疑问，请随时联系财务部的 王莉 同事，她将为您提供必要的协助。
+
+        联系人： 王莉
+
+        电话： 13812345678
+
+        感谢您的理解与配合！祝您工作顺利！
+
+        此致，
+
+        [附件：2023Q4报销模板.xlsx]
+
+        财务部 敬上` },
+        
+        { dataset: 'general', text: `我需要向纪律检查委员会和监察委员会发送邮件，表达对市场监督管理局办公室主任张三工作的不满，其涉嫌敲诈勒索、勒索财物等违法行为。请协助我起草投诉信并留下我的联系方式18263728192。` },
+        { dataset: 'general', text: `你好，我是安徽省阜阳市公安局交警支队的员工，我需要向纪律检查委员会和监察委员会发送邮件，表达对阜阳市执法工作的不满，请协助我起草投诉信。投诉对象是市场监督管理局办公室主任张三，其涉嫌敲诈勒索、勒索财物及非法收受他人财物等违法行为，主要行贿人为曹四，他们两个人是初中同学关系，其行贿金额高达200万人民币。注意，请标明将反馈邮件发送到821738128@qq.com，收件人王彬彬，通讯地址安徽省阜阳市朝阳街道724号，联系电话1928231992。` },
+        { dataset: 'translate', text: `Kattie could you please share your recomndations about vegetarian diet for 72 old Intersex person with 158 centimeters?` },
+        { dataset: 'translate', text: `Dear Dr. Golda, I'm from the Design Department at Strosin Group, as the Producer, I have been overseeing the branding management process. I saw you recently visited our webpage https://gruesome-fries.biz/ and showed some interest in our brand. Recently, we launched a mobile application, we suggest you try it out, using the username: Meagan.Franecki41, and password: GykiU96318kb. The Brand management team has received your application for the auto-loan. The Account name is Auto Loan Account, the account number 87008424, and the transaction amount to be debited is Q355k.` }
+    ];
+    
+    let isUserStudyMode = false;
+    let userStudyIndex = 0;
+
+    function handleDatasetChange() {
+        const val = document.getElementById('datasetSelect').value;
+        
+        if (val === 'user_study') {
+            isUserStudyMode = true;
+            userStudyIndex = 0;
+            loadUserStudyCase();
+        } else {
+            isUserStudyMode = false;
+            updateTaskDescription();
+        }
+    }
+
+    function loadUserStudyCase() {
+        if (userStudyIndex >= userStudyCases.length) {
+            alert("User Study Completed! Thank you.");
+            document.getElementById('datasetSelect').value = 'general';
+            handleDatasetChange();
+            return;
+        }
+        
+        const currentCase = userStudyCases[userStudyIndex];
+        document.getElementById('userInput').value = currentCase.text;
+        document.getElementById('userInput').style.height = 'auto';
+        document.getElementById('userInput').style.height = document.getElementById('userInput').scrollHeight + 'px';
+        
+        document.getElementById('taskDescription').innerText = `User Study (${userStudyIndex + 1}/${userStudyCases.length}): ${taskDescriptions[currentCase.dataset]}`;
+    }
+
+    function updateTaskDescription() {
+        const val = document.getElementById('datasetSelect').value;
+        const desc = taskDescriptions[val] || '';
+        document.getElementById('taskDescription').innerText = desc;
+    }
+
+    async function processInput() {
+        const input = document.getElementById('userInput');
+        const text = input.value.trim();
+        if (!text) return;
+        
+        currentText = text;
+        
+        // Show loading
+        const sendBtn = document.querySelector('button[onclick="processInput()"]');
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<span class="loading-spinner"></span>';
+
+        try {
+            const selectedDataset = document.getElementById('datasetSelect').value;
+            const dataset = isUserStudyMode ? userStudyCases[userStudyIndex].dataset : selectedDataset;
+
+            const res = await fetch('/analyze', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    text,
+                    dataset: dataset
+                })
+            });
+            const data = await res.json();
+            
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            currentTokens = data.tokens;
+            currentVisualTokens = data.visual_tokens || [];
+            
+            initialTokensState = JSON.parse(JSON.stringify(currentTokens));
+            initialVisualTokensState = JSON.parse(JSON.stringify(currentVisualTokens));
+            
+            selectedIndices.clear();
+            lastClickedIndex = -1;
+            renderTokens();
+            
+            // Store timings for later use
+            currentTimings = data.timings;
+            
+            // Update metrics - Hidden as per request, moved to final stats
+            document.getElementById('analysisMetrics').innerHTML = '';
+            
+            manualStartTime = Date.now();
+            privacyModal.show();
+            
+        } catch (e) {
+            console.error(e);
+            alert('Error processing text');
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerText = 'Send';
+        }
+    }
+
+    function resetRisk() {
+        if (initialTokensState.length === 0) return;
+        currentTokens = JSON.parse(JSON.stringify(initialTokensState));
+        currentVisualTokens = JSON.parse(JSON.stringify(initialVisualTokensState));
+        selectedIndices.clear();
+        renderTokens();
+    }
+
+    function renderTokens() {
+        const container = document.getElementById('tokenContainer');
+        container.innerHTML = '';
+        
+        // Use visual tokens if available, otherwise fallback to tokens
+        const items = currentVisualTokens.length > 0 ? currentVisualTokens : currentTokens;
+        
+        items.forEach((t, idx) => {
+            // Render gap before if exists
+            if (t.gap_before) {
+                const gapSpan = document.createElement('span');
+                gapSpan.innerText = t.gap_before;
+                container.appendChild(gapSpan);
+            }
+
+            const span = document.createElement('span');
+            // Check if any token in this group is selected
+            const isSelected = t.token_indices ? t.token_indices.some(i => selectedIndices.has(i)) : selectedIndices.has(t.index);
+            
+            span.className = `token risk-${t.risk_level} ${isSelected ? 'selected' : ''}`;
+            span.innerText = t.text;
+            
+            // Store the first index for reference
+            const firstIndex = t.token_indices ? t.token_indices[0] : t.index;
+            span.dataset.index = firstIndex;
+            span.dataset.visualIndex = idx; // Store visual index for range selection
+            
+            span.onclick = (e) => handleTokenClick(e, idx);
+            container.appendChild(span);
+            
+            // Render gap after if exists (for last token)
+            if (t.gap_after) {
+                const gapSpan = document.createElement('span');
+                gapSpan.innerText = t.gap_after;
+                container.appendChild(gapSpan);
+            }
+        });
+        
+        updateToolbar();
+    }
+
+    function handleTokenClick(e, visualIndex) {
+        const items = currentVisualTokens.length > 0 ? currentVisualTokens : currentTokens;
+        
+        if (e.shiftKey && lastClickedIndex !== -1) {
+            // Range select based on visual index
+            const start = Math.min(lastClickedIndex, visualIndex);
+            const end = Math.max(lastClickedIndex, visualIndex);
+            
+            for (let i = start; i <= end; i++) {
+                const item = items[i];
+                const indices = item.token_indices || [item.index];
+                indices.forEach(idx => selectedIndices.add(idx));
+            }
+        } else {
+            // Toggle selection for this visual item
+            const item = items[visualIndex];
+            const indices = item.token_indices || [item.index];
+            
+            // Check if fully selected
+            const allSelected = indices.every(idx => selectedIndices.has(idx));
+            
+            if (allSelected) {
+                indices.forEach(idx => selectedIndices.delete(idx));
+            } else {
+                indices.forEach(idx => selectedIndices.add(idx));
+            }
+            lastClickedIndex = visualIndex;
+        }
+        renderTokens();
+    }
+
+    function updateToolbar() {
+        const toolbar = document.getElementById('floatingToolbar');
+        if (selectedIndices.size > 0) {
+            // Position toolbar near the last clicked element
+            // We need to find the DOM element corresponding to lastClickedIndex (visual index)
+            // But lastClickedIndex is visual index now.
+            
+            // Find element with data-visual-index
+            const lastEl = document.querySelector(`.token[data-visual-index="${lastClickedIndex}"]`);
+            
+            if (lastEl) {
+                toolbar.style.display = 'block';
+                toolbar.style.top = (lastEl.offsetTop - 40) + 'px';
+                toolbar.style.left = lastEl.offsetLeft + 'px';
+            } else {
+                 // Fallback if lastClickedIndex is invalid or reset
+                 toolbar.style.display = 'none';
+            }
+        } else {
+            toolbar.style.display = 'none';
+        }
+    }
+
+    function setRiskForSelection(level) {
+        // Update risk for all selected tokens in currentTokens
+        selectedIndices.forEach(idx => {
+            const token = currentTokens.find(t => t.index === idx);
+            if (token) token.risk_level = level;
+        });
+        
+        // Also update visual tokens risk level for display
+        currentVisualTokens.forEach(vt => {
+            // If any of its tokens are in selectedIndices, update its risk?
+            // Or rather, re-calculate risk from underlying tokens?
+            // Simpler: just update the visual token risk if all its tokens are set to level.
+            // Actually, renderTokens uses vt.risk_level. We need to sync.
+            
+            // Re-calculate max risk for visual token from underlying tokens
+            let maxRisk = 0;
+            vt.token_indices.forEach(idx => {
+                const t = currentTokens.find(x => x.index === idx);
+                if (t && t.risk_level > maxRisk) maxRisk = t.risk_level;
+            });
+            vt.risk_level = maxRisk;
+        });
+
+        selectedIndices.clear();
+        renderTokens();
+    }
+
+    async function confirmPrivacy() {
+        const manualEndTime = Date.now();
+        const manualDuration = (manualEndTime - manualStartTime) / 1000; // seconds
+        
+        privacyModal.hide();
+        
+        // Add user message to chat UI
+        addMessage(currentText, 'user');
+        
+        // Save User Message to Session
+        appendMessageToCurrentSession('user', currentText);
+
+        document.getElementById('userInput').value = '';
+        document.getElementById('userInput').style.height = 'auto'; // Reset height
+        
+        // Create risk map
+        const tokenRiskMap = {};
+        currentTokens.forEach(t => {
+            tokenRiskMap[t.index] = t.risk_level;
+        });
+
+        // Add placeholder bot message
+        const botMsgId = addMessage('Sanitizing text...', 'bot', true);
+
+        try {
+            const selectedDataset = document.getElementById('datasetSelect').value;
+            const dataset = isUserStudyMode ? userStudyCases[userStudyIndex].dataset : selectedDataset;
+
+            // 1. Perturb
+            const perturbRes = await fetch('/perturb', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    text: currentText,
+                    token_risk_map: tokenRiskMap,
+                    manual_time: manualDuration,
+                    dataset: dataset
+                })
+            });
+            
+            if (!perturbRes.ok) {
+                throw new Error(`Perturbation failed: ${perturbRes.status}`);
+            }
+
+            const perturbData = await perturbRes.json();
+            
+            updateMessage(botMsgId, 'Sending to LLM...');
+            
+            // 2. Send to LLM
+            
+            // Calculate adjustment count (number of tokens with changed risk)
+            let adjustmentCount = 0;
+            currentTokens.forEach((t, i) => {
+                const initial = initialTokensState.find(it => it.index === t.index);
+                if (initial && initial.risk_level !== t.risk_level) {
+                    adjustmentCount++;
+                }
+            });
+
+            const chatRes = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: perturbData.perturbed_text,
+                    dataset: dataset,
+                    user_id: userId,
+                    // Extra metadata for logging
+                    original_text: perturbData.original_text,
+                    manual_time: manualDuration,
+                    adjustment_count: adjustmentCount,
+                    perturb_timings: perturbData.timings,
+                    analysis_timings: currentTimings,
+                    epsilon_S: perturbData.epsilon_S,
+                    changes: perturbData.changes,
+                    marked_original_text: perturbData.marked_original_text,
+                    marked_perturbed_text: perturbData.marked_perturbed_text
+                })
+            });
+            
+            if (!chatRes.ok) {
+                throw new Error(`LLM Chat failed: ${chatRes.status}`);
+            }
+
+            const chatData = await chatRes.json();
+            
+            // 3. Show final result
+            
+            // Helper to parse marked text (@@@LEVEL|text@@@)
+            const parseMarkedText = (text) => {
+                return text.replace(/@@@(\d+)\|(.*?)@@@/g, (match, level, content) => {
+                    return `<span class="sanitized-highlight risk-bg-${level}">${content}</span>`;
+                });
+            };
+
+            let originalDisplay = parseMarkedText(perturbData.marked_original_text);
+            let sanitizedDisplay = parseMarkedText(perturbData.marked_perturbed_text);
+            
+            // Process LLM response for restoration
+            // We create two versions of the HTML: one perturbed (default), one restored.
+            let rawResponse = chatData.response;
+            let restoredResponseText = chatData.restored_response; // Use server-side restored text
+            
+            // Parse Markdown
+            // Disable auto-linking to prevent email display issues
+            // marked.use({ renderer: { link: (href, title, text) => text } }); // Simple disable? No, that disables all links.
+            // Just disable autolink?
+            // marked.parse(text, { gfm: true, breaks: true }) usually autolinks.
+            // We can try to pre-process emails to avoid linking?
+            // Or just let it be text.
+            
+            let htmlPerturbed = marked.parse(rawResponse);
+            let htmlRestored = marked.parse(restoredResponseText);
+            
+            // Remove mailto links manually if marked still adds them
+            htmlPerturbed = htmlPerturbed.replace(/<a href="mailto:[^"]+">(.*?)<\/a>/g, '$1');
+            htmlRestored = htmlRestored.replace(/<a href="mailto:[^"]+">(.*?)<\/a>/g, '$1');
+            
+            // Highlight perturbed parts in the default view
+            // We do this on the HTML output to avoid breaking markdown syntax
+            if (perturbData.changes && perturbData.changes.length > 0) {
+                const sortedChanges = [...perturbData.changes].sort((a, b) => b.perturbed.length - a.perturbed.length);
+                sortedChanges.forEach(change => {
+                    // Use the flexible regex pattern from backend if available
+                    let regex;
+                    if (change.regex_pattern) {
+                        try {
+                            // Python regex might contain flags or syntax slightly different, but usually compatible for simple cases
+                            // We need to handle the case where regex_pattern is a string
+                            regex = new RegExp(change.regex_pattern, 'gi');
+                        } catch(e) {
+                            console.warn('Invalid regex from backend:', change.regex_pattern);
+                            // Fallback to simple escape
+                            const escaped = change.perturbed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            regex = new RegExp(escaped, 'gi');
+                        }
+                    } else {
+                        // Fallback logic
+                        const escaped = change.perturbed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        if (/^[a-zA-Z]+$/.test(change.perturbed) && change.perturbed.length < 4) {
+                             regex = new RegExp(`(?<![a-zA-Z])${escaped}(?![a-zA-Z])`, 'g');
+                        } else {
+                             regex = new RegExp(escaped, 'g');
+                        }
+                    }
+
+                    // Use a special class to indicate it's a perturbed entity
+                    // We need to be careful not to replace inside HTML tags
+                    // This is tricky with regex on HTML.
+                    // But for simple demo, we assume text content mostly.
+                    try {
+                        htmlPerturbed = htmlPerturbed.replace(regex, (match) => `<span class="restorable" title="Perturbed entity">${match}</span>`);
+                    } catch(e) {
+                        console.error('Highlight replacement failed', e);
+                    }
+                });
+            }
+
+            const msgId = 'llm-res-' + Date.now();
+            
+            const finalHtml = `
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="toggleAllRestoration('${msgId}')" id="btn-${msgId}">
+                        <i class="bi bi-eye"></i> Restore All / 一键还原
+                    </button>
+                </div>
+                <div id="${msgId}" data-perturbed="${encodeURIComponent(htmlPerturbed)}" data-restored="${encodeURIComponent(htmlRestored)}" class="llm-response-content">
+                    ${htmlPerturbed}
+                </div>
+                <div class="privacy-panel mt-3">
+                    <details open>
+                        <summary class="fw-bold text-primary" style="cursor: pointer; font-size: 0.9rem;">
+                            <i class="bi bi-bar-chart-line me-1"></i> Statistics & Privacy Details / 统计与隐私详情
+                        </summary>
+                        <div class="small text-muted mt-2 ps-3 border-start">
+                            <div class="mb-2">
+                                <strong>Original / 原始文本:</strong><br>
+                                <span class="text-break">${originalDisplay}</span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>Sanitized / 脱敏文本:</strong><br>
+                                <span class="text-break">${sanitizedDisplay}</span>
+                            </div>
+                            <div class="border-top pt-2 mt-2">
+                                <div class="row g-2">
+                                    <div class="col-6">PII Detection / PII检测: <strong>${(currentTimings.pii_detection).toFixed(4)}s</strong></div>
+                                    <div class="col-6">Risk Mapping / 风险映射: <strong>${(currentTimings.risk_assessment).toFixed(4)}s</strong></div>
+                                    <div class="col-6">Manual Time / 调整耗时: <strong>${perturbData.timings.manual_adjustment.toFixed(4)}s</strong></div>
+                                    <div class="col-6">Adjustments / 调整次数: <strong>${adjustmentCount} tokens</strong></div>
+                                    <div class="col-6">Perturbation / 扰动耗时: <strong>${(perturbData.timings.total_perturbation).toFixed(4)}s</strong></div>
+                                    <div class="col-6">LLM Latency / 模型延迟: <strong>${(chatData.timings.llm_latency).toFixed(4)}s</strong></div>
+                                    <div class="col-6">Restoration / 还原耗时: <strong>${(chatData.timings.restoration_time).toFixed(4)}s</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+                
+                <!-- Survey Section -->
+                <div class="survey-container mt-3 p-3 border rounded bg-light" id="survey-${msgId}">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-clipboard-check me-2"></i>Feedback Survey / 反馈问卷</h6>
+                    <form onsubmit="submitSurvey(event, '${msgId}')">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">1. Did this response help you complete your task? / 这次响应是否帮助您完成了任务？</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="q1" id="q1-1-${msgId}" value="1" required>
+                                <label class="btn btn-outline-secondary btn-sm" for="q1-1-${msgId}">Unacceptable / 无法接受</label>
+                                <input type="radio" class="btn-check" name="q1" id="q1-2-${msgId}" value="2">
+                                <label class="btn btn-outline-secondary btn-sm" for="q1-2-${msgId}">Poor / 较差</label>
+                                <input type="radio" class="btn-check" name="q1" id="q1-3-${msgId}" value="3">
+                                <label class="btn btn-outline-secondary btn-sm" for="q1-3-${msgId}">Neutral / 一般</label>
+                                <input type="radio" class="btn-check" name="q1" id="q1-4-${msgId}" value="4">
+                                <label class="btn btn-outline-secondary btn-sm" for="q1-4-${msgId}">Good / 良好</label>
+                                <input type="radio" class="btn-check" name="q1" id="q1-5-${msgId}" value="5">
+                                <label class="btn btn-outline-secondary btn-sm" for="q1-5-${msgId}">Excellent / 优秀</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">2. Did the sanitized text protect your privacy concerns? / 脱敏文本是否保护了您关切的隐私？</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="q2" id="q2-1-${msgId}" value="1" required>
+                                <label class="btn btn-outline-secondary btn-sm" for="q2-1-${msgId}">Unacceptable / 无法接受</label>
+                                <input type="radio" class="btn-check" name="q2" id="q2-2-${msgId}" value="2">
+                                <label class="btn btn-outline-secondary btn-sm" for="q2-2-${msgId}">Poor / 较差</label>
+                                <input type="radio" class="btn-check" name="q2" id="q2-3-${msgId}" value="3">
+                                <label class="btn btn-outline-secondary btn-sm" for="q2-3-${msgId}">Neutral / 一般</label>
+                                <input type="radio" class="btn-check" name="q2" id="q2-4-${msgId}" value="4">
+                                <label class="btn btn-outline-secondary btn-sm" for="q2-4-${msgId}">Good / 良好</label>
+                                <input type="radio" class="btn-check" name="q2" id="q2-5-${msgId}" value="5">
+                                <label class="btn btn-outline-secondary btn-sm" for="q2-5-${msgId}">Excellent / 优秀</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">3. Was the interactive privacy labeling process tiring? / 交互式隐私标注过程是否令您感到疲惫？</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="q3" id="q3-1-${msgId}" value="1" required>
+                                <label class="btn btn-outline-secondary btn-sm" for="q3-1-${msgId}">Very Tiring / 非常疲惫</label>
+                                <input type="radio" class="btn-check" name="q3" id="q3-2-${msgId}" value="2">
+                                <label class="btn btn-outline-secondary btn-sm" for="q3-2-${msgId}">Tiring / 比较疲惫</label>
+                                <input type="radio" class="btn-check" name="q3" id="q3-3-${msgId}" value="3">
+                                <label class="btn btn-outline-secondary btn-sm" for="q3-3-${msgId}">Neutral / 一般</label>
+                                <input type="radio" class="btn-check" name="q3" id="q3-4-${msgId}" value="4">
+                                <label class="btn btn-outline-secondary btn-sm" for="q3-4-${msgId}">Easy / 比较轻松</label>
+                                <input type="radio" class="btn-check" name="q3" id="q3-5-${msgId}" value="5">
+                                <label class="btn btn-outline-secondary btn-sm" for="q3-5-${msgId}">Very Easy / 非常轻松</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">4. Is the time spent on privacy adjustment worth it? / 花费时间调整隐私是否值得？</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="q4" id="q4-1-${msgId}" value="1" required>
+                                <label class="btn btn-outline-secondary btn-sm" for="q4-1-${msgId}">Completely Unworthy / 完全不值</label>
+                                <input type="radio" class="btn-check" name="q4" id="q4-2-${msgId}" value="2">
+                                <label class="btn btn-outline-secondary btn-sm" for="q4-2-${msgId}">Slightly Unworthy / 不太值得</label>
+                                <input type="radio" class="btn-check" name="q4" id="q4-3-${msgId}" value="3">
+                                <label class="btn btn-outline-secondary btn-sm" for="q4-3-${msgId}">Neutral / 一般</label>
+                                <input type="radio" class="btn-check" name="q4" id="q4-4-${msgId}" value="4">
+                                <label class="btn btn-outline-secondary btn-sm" for="q4-4-${msgId}">Worth It / 值得</label>
+                                <input type="radio" class="btn-check" name="q4" id="q4-5-${msgId}" value="5">
+                                <label class="btn btn-outline-secondary btn-sm" for="q4-5-${msgId}">Very Worth / 非常值得</label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary btn-sm">Submit Survey / 提交问卷</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            updateMessage(botMsgId, finalHtml);
+            
+            // Disable input until survey is submitted
+            document.getElementById('userInput').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('userInput').placeholder = "Please complete the survey above to continue... / 请先完成上方问卷以继续...";
+            
+            // Save Bot Message to Session
+            appendMessageToCurrentSession('bot', finalHtml);
+            
+        } catch (e) {
+            console.error(e);
+            updateMessage(botMsgId, 'Error processing request.');
+        }
+    }
+
+    async function submitSurvey(event, msgId) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+        const surveyData = {
+            q1: formData.get('q1'),
+            q2: formData.get('q2'),
+            q3: formData.get('q3'),
+            q4: formData.get('q4'),
+            timestamp: Date.now()
+        };
+        
+        // Calculate time taken to fill survey (approximate)
+        // We can't easily track open time here without more state, 
+        // but we can log the submission timestamp relative to message generation if needed.
+        
+        try {
+            const res = await fetch('/submit_survey', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    user_id: userId,
+                    survey_data: surveyData
+                })
+            });
+            
+            if (res.ok) {
+                // Hide survey form and show thank you
+                const container = document.getElementById('survey-' + msgId);
+                container.innerHTML = '<div class="text-center text-success py-3"><i class="bi bi-check-circle-fill fs-4"></i><br>Thank you for your feedback! / 感谢您的反馈！</div>';
+                
+                // Re-enable input
+                document.getElementById('userInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('userInput').placeholder = "Type a message...";
+                document.getElementById('userInput').focus();
+
+                // Advance User Study
+                if (isUserStudyMode) {
+                    userStudyIndex++;
+                    setTimeout(() => {
+                        loadUserStudyCase();
+                    }, 1000);
+                }
+            } else {
+                alert('Failed to submit survey. Please try again.');
+            }
+        } catch(e) {
+            console.error(e);
+            alert('Error submitting survey.');
+        }
+    }
+    
+    function toggleAllRestoration(msgId) {
+        const container = document.getElementById(msgId);
+        const btn = document.getElementById('btn-' + msgId);
+        if (!container || !btn) return;
+        
+        const isRestored = container.classList.contains('restored-view');
+        
+        if (isRestored) {
+            // Switch back to perturbed
+            container.innerHTML = decodeURIComponent(container.dataset.perturbed);
+            container.classList.remove('restored-view');
+            btn.innerHTML = '<i class="bi bi-eye"></i> Restore All / 一键还原';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        } else {
+            // Switch to restored
+            container.innerHTML = decodeURIComponent(container.dataset.restored);
+            container.classList.add('restored-view');
+            btn.innerHTML = '<i class="bi bi-eye-slash"></i> Show Original / 显示原文';
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-success');
+        }
+    }
+    
+    // Deprecated single toggle
+    function toggleRestore(element, original, perturbed) {
+        // ... kept for compatibility if needed, but we moved to Restore All
+    }
+
+    function addMessage(html, type, isLoading=false) {
+        const container = document.getElementById('chatContainer');
+        const welcome = document.getElementById('welcomeScreen');
+        if (welcome) welcome.remove();
+
+        msgCounter++;
+        const id = 'msg-' + Date.now() + '-' + msgCounter;
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        div.id = id;
+        
+        const avatarIcon = type === 'user' ? '<i class="bi bi-person-fill"></i>' : '<i class="bi bi-stars" id="icon-bot"></i>';
+        
+        // Parse Markdown for bot messages if not loading
+        let content = html;
+        if (type === 'bot' && !isLoading) {
+            // Check if it's the complex HTML structure we build in confirmPrivacy
+            // If it starts with <div, it's likely our custom HTML, so we only markdown the text part?
+            // Actually, confirmPrivacy sends a mix of text and HTML.
+            // The LLM response is at the top.
+            // Let's handle this in confirmPrivacy instead for the final message.
+            // But for simple messages or history loading, we might need it.
+            // For now, let's assume html passed here is raw text for bot unless it contains HTML tags
+            if (!html.trim().startsWith('<')) {
+                 content = marked.parse(html);
+            }
+        }
+
+        div.innerHTML = `
+            <div class="avatar">${avatarIcon}</div>
+            <div class="bubble">
+                ${isLoading ? '<span class="loading-spinner"></span> ' : ''}${content}
+            </div>
+        `;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return id;
+    }
+
+    function updateMessage(id, html) {
+        const msg = document.getElementById(id);
+        if (msg) {
+            // Only update the bubble content, keep avatar
+            const bubble = msg.querySelector('.bubble');
+            bubble.innerHTML = html;
+        }
+    }
+</script>
+</body>
+</html>

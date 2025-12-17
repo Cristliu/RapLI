@@ -1,0 +1,14 @@
+# Requirements for Utility Metrics Analysis
+
+# Core dependencies
+transformers>=4.30.0
+torch>=2.0.0
+nltk>=3.8.0
+rouge-score>=0.1.2
+pandas>=1.5.0
+tqdm>=4.65.0
+numpy>=1.24.0
+
+# Optional: for better performance
+# accelerate>=0.20.0
+# sentencepiece>=0.1.99

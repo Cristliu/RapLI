@@ -152,11 +152,25 @@ def main():
     logger.info(f"Running => task: {args.task}, dataset: {args.dataset}, epsilon: {args.epsilon}, max_budget: {args.max_budget}")
     logger.info(f"Model Name: {args.model_name}")
 
-    ###Ablation Experiment 1: Use bert-base-uncased directly for args.model_name
-    if args.ablation_1:
-        model, tokenizer = load_model_and_tokenizer("bert-base-uncased")
-    else:
-        model, tokenizer = load_model_and_tokenizer(args.model_name)
+    # Select appropriate model based on dataset
+    if args.dataset in ["spam_email"]:  # Chinese datasets
+        if args.ablation_1:
+            model_name = "hfl/chinese-bert-wwm-ext"  # Use Chinese BERT
+        else:
+            if "distilbert-base-cased" in args.model_name or "bert-base-uncased" in args.model_name:
+                model_name = "hfl/chinese-bert-wwm-ext"  # Use BERT instead of RoBERTa to avoid rare words
+            else:
+                model_name = args.model_name
+    else:  # English datasets
+        if args.ablation_1:
+            model_name = "bert-base-uncased"
+        else:
+            model_name = args.model_name
+    
+    model, tokenizer = load_model_and_tokenizer(model_name)
+    # Print confirmation of model and tokenizer used
+    print(f"Using model: {model_name}")
+    print(f"Using tokenizer: {type(tokenizer)}")
 
     data_loader = DataLoader(args.task, args.dataset)
     dataset = data_loader.load_and_preprocess()
@@ -165,7 +179,18 @@ def main():
 
 
     # Initialize PII detection, risk assessment, and noise addition classes
-    detector = CombinedPIIDetector()
+    print(f"Initializing CombinedPIIDetector for dataset: {args.dataset}")
+    
+    # Select PII detection mode based on arguments
+    use_transformer = (args.pii_detection_mode == "transformer") or args.use_transformer_pii
+    if args.dataset in ["spam_email"]:
+        print(f"Chinese dataset detection mode: {args.pii_detection_mode}")
+        if use_transformer:
+            print("[Combined] Enable Transformer enhanced mode")
+        else:
+            print("[Combined] Use rule matching mode")
+    
+    detector = CombinedPIIDetector(dataset_name=args.dataset, use_transformer=use_transformer)
     risk_assessor = RiskAssessor()
     noise_adder = DPNoiseAdder(model, tokenizer, args)
 
@@ -194,6 +219,14 @@ def main():
                 text = example["text"]
                 ground_truth = example["label"]  # This is the summary text
                 hypothesis = None
+            elif args.dataset == "spam_email":
+                text = example["text"]
+                # Convert string label to integer: spam=1, normal=0
+                if example["label"] == "spam":
+                    ground_truth = 1
+                else:  # normal
+                    ground_truth = 0
+                hypothesis = None
 
 
         # 1) PII detection
@@ -204,6 +237,12 @@ def main():
         # 2) Risk assessment & calculate privacy budget
             st2 = time.time()
             assessed_results = risk_assessor.assess_risk(combined_results)
+            
+            # [Important] For Chinese datasets, standardize punctuation to avoid [UNK] tokens
+            if args.dataset in ['spam_email']:
+                text = text.replace('—', '-')  # Long dash
+                text = text.replace('…', '...')  # Ellipsis
+
             # Use task-specific tokenizer to encode text and get offset mapping
             encoded = tokenizer.encode_plus(
                 text,
@@ -243,7 +282,13 @@ def main():
                     if token_text in keep_words:
                         token_level = None
                     else:
-                        token_level = random.randint(1, 3)  # Set default risk level
+                        if args.dataset == "samsum":
+                            if random.random() < args.non_pii_perturbation_prob:
+                                token_level = random.randint(1, 3)
+                            else:
+                                token_level = None
+                        else:
+                            token_level = random.randint(1, 3)  # Set default risk level
                         # print(f"\nToken: {token} -> {token_level}")
                 token_risk_levels.append(token_level)
                 
