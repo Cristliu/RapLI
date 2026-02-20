@@ -88,6 +88,6 @@ To validate the practical applicability and usability of Rap-LI, we designed a *
 ### Resources
 
 * **Source Code**: The complete system code is available in the `interactive_demo/` folder. Please refer to `interactive_demo/README.md` for detailed setup and usage instructions.
-* **Video Tutorial & Demo**: You can watch the system introduction, usage tutorial, and recorded user study videos here: [Google Drive Link](https://drive.google.com/drive/folders/1i4T3mNYpwI6BQmr5cRNuAYJpxR0fen_D?usp=drive_link)
+* **Video Tutorial & Demo**: You can watch the system introduction and usage tutorial videos here: [Google Drive Link](https://drive.google.com/drive/folders/1i4T3mNYpwI6BQmr5cRNuAYJpxR0fen_D?usp=drive_link)
 
 ---
